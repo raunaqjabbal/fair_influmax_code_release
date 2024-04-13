@@ -18,7 +18,7 @@ class Wolf:
     def __init__(self, g, attribute, objectives, name=None):
         self.g = g
         self.g_len = len(self.g.nodes)
-        self.start = set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))
+        self.start = set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))    
         self.attribute = attribute
         self.v = set(range(self.g_len)) - self.start
         
@@ -26,6 +26,7 @@ class Wolf:
         self.start_c = self.get_property(self.start)
         self.objectives = objectives
         
+        self.subgraph = {key: self.g.subgraph(self.c[key]) for key,_ in self.c.items()}
         self.name = name
         self.domination_count = 0
         self.dominated_wolves = set()
@@ -45,14 +46,12 @@ class Wolf:
     #maximize
     def group_rationality_metric(self):
         self.group_rationality = self.influence
-        for kind, next_list in self.next_c.items():
-                                
-            subgraph = self.g.subgraph(self.c[kind])
-            
-            activated_nodes = self.start_c[kind]
-            newly_activated = self.start_c[kind]
-            idx = 1 
-            # self.group_activation_dict = defaultdict(list)
+        for kind, next_list in self.next_c.items():                                
+            subgraph = self.subgraph[kind]
+            init = int(np.ceil(len(self.c[kind])*25/self.g_len))
+            init_nodes = set(random.sample(list(self.c[kind]), init))
+            activated_nodes = init_nodes
+            newly_activated = init_nodes
             while newly_activated:
                 next_round_activation = set()
                 for node in newly_activated:
@@ -111,7 +110,7 @@ class Wolf:
         self.next = activated_nodes
         self.next_c = self.get_property(self.next)
         
-        
+
         self.objective_values = [self.influence_metric()]
         if "maximin" in self.objectives:
             self.objective_values+=[self.maximin_fairness_metric()]
@@ -133,30 +132,22 @@ class Wolf:
             step = min(step, len(e_o), len(e_n))
             self.start = self.start - set(random.sample(list(e_o), step))
             self.start = self.start.union(set(random.sample(list(e_n), step)))
+            
         else:
             if len(self.v)<self.g_len*0.8:
-                self.v = set(range(self.g_len)) - self.start
-            # if DEBUG==self:
-            #     print("V:", len(self.v),"X:", len(self.start),"Leader:", len(self.leader))
+                self.v = set(range(self.g_len))
             e_n = self.v - self.start.union(self.leader)
             e_o = self.start.intersection(self.leader) 
             d = len(self.start - self.leader)
             
             step = int(np.ceil((A-1)*d))
-            # if DEBUG==self:
-            #     print("e_n:", len(e_n),"e_o:", len(e_o),"step:", step)
             step = min(step, len(e_o), len(e_n))
+            
             self.start = self.start - set(random.sample(list(e_o), step))
-            # if DEBUG==self:
-            #     print("Removing start: ", len(self.start))
             v_step = set(random.sample(list(e_n), step))
             self.start = self.start.union(v_step)
-            # if DEBUG==self:
-            #     print("Adding start: ", len(self.start))
             self.v = self.v - v_step 
-            # if DEBUG==self:
-            #     print("New V: ", len(self.v))
-            #     print("\n\n")
+            
                     
     def get_property(self,node_set):
         property_dict = defaultdict(list)
@@ -171,12 +162,15 @@ class Wolf:
         return property_dict
     
     def get_leader(self, wolves):
-        min_difference = float('inf')
+        min_difference = 100
         self.leader = set()
-        for X in wolves:
-            difference = len(self.start - X.start)
-            if difference < min_difference:
-                min_difference = difference
-                self.leader = X.start.copy()
-        # self.leader = set(random.sample(list(self.leader), int((len(self.leader)*0.6))))
+        if len(wolves)>0:
+            for X in wolves:
+                difference = len(self.start - X.start)
+                if difference < min_difference:
+                    min_difference = difference
+                    self.leader = X.start
+        else:
+            self.leader =  set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))
 
+        self.leader = set(np.array(list(self.leader))[np.random.rand(SEED_SIZE) < np.random.rand(SEED_SIZE)])
