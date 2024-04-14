@@ -15,7 +15,7 @@ SEED_SIZE = 25
 POPULATION_SIZE = 500
 
 class Wolf:
-    def __init__(self, g, attribute, objectives, name=None):
+    def __init__(self, g, attribute, objectives):
         self.g = g
         self.g_len = len(self.g.nodes)
         self.start = set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))    
@@ -27,29 +27,27 @@ class Wolf:
         self.objectives = objectives
         
         self.subgraph = {key: self.g.subgraph(self.c[key]) for key,_ in self.c.items()}
-        self.name = name
-        self.domination_count = 0
-        self.dominated_wolves = set()
         self.objective_values = []
-    #maximize
+
     def influence_metric(self):
         self.influence = len(self.next)
         return self.influence
-    #maximize
+
     def maximin_fairness_metric(self):
-        self.maximin_fairness = np.inf
-        for kind, next_list in self.next_c.items():
-            start_list = self.c[kind]    
-            if self.maximin_fairness > len(next_list)/len(start_list):
-                self.maximin_fairness = len(next_list)/len(start_list)
+        self.maximin_fairness = 2
+        for kind, start_list in self.c.items():
+            ratio = self.next_c[kind]/len(start_list)
+            if self.maximin_fairness > ratio:
+                self.maximin_fairness = ratio
         return self.maximin_fairness
-    #maximize
+
     def group_rationality_metric(self):
         self.group_rationality = self.influence
-        for kind, next_list in self.next_c.items():                                
+        for kind, start_list in self.c.items():                                
+            next_list = self.next_c[kind]
             subgraph = self.subgraph[kind]
-            init = int(np.ceil(len(self.c[kind])*25/self.g_len))
-            init_nodes = set(random.sample(list(self.c[kind]), init))
+            init = int(np.ceil(len(self.c[kind])*SEED_SIZE/self.g_len))
+            init_nodes = set(random.sample(list(start_list), init))
             activated_nodes = init_nodes
             newly_activated = init_nodes
             while newly_activated:
@@ -64,22 +62,23 @@ class Wolf:
                 
             if len(next_list) <= len(activated_nodes):
                 self.group_rationality = 0
+                break
         return self.group_rationality
     
     #maximize
     def group_activation_speed_metric(self):
         self.group_activation_speed = np.inf
-        if self.component[0]==0:
-            self.group_activation_speed = 0
-        else:
-            for key, value in self.c.items():
-                speed_key = np.dot(np.array(self.group_activation_dict[key]),self.component)/(self.component[0]*(len(value)-len(self.start_c[key])))                
-                if speed_key < self.group_activation_speed:
-                    self.group_activation_speed = speed_key
-            
-            if self.group_activation_speed == np.inf:
-                self.group_activation_speed = 0
+        
+        for key, value in self.c.items():
+            speed_key = np.dot(np.array(self.group_activation_dict[key]),self.component)/(self.component[0]*len(value - self.start_c[key].intersection(value)) )                
+            if speed_key < self.group_activation_speed:
+                self.group_activation_speed = speed_key
+        
+        if self.group_activation_speed == np.inf:
+            raise NotImplementedError
+            # self.group_activation_speed = 0
         return self.group_activation_speed
+    
     def ic_model(self, g=None, start=None):
         if g==None:
             g = self.g
@@ -87,17 +86,17 @@ class Wolf:
             start = self.start.copy()
         activated_nodes = start.copy()
         newly_activated = start.copy()
-        idx = 1 
+        idx = 0
         self.group_activation_dict = defaultdict(list)
         while newly_activated:
             next_round_activation = set()
             for node in newly_activated:
-                neighbors = set(g.neighbors(node)) - activated_nodes
+                neighbors = (set(g.neighbors(node)) - activated_nodes) - newly_activated
                 for neighbor in neighbors:
                     if random.random() < PROPOGATION:
                         next_round_activation.add(neighbor)
-            activated_nodes.update(next_round_activation)
             newly_activated = next_round_activation.copy()
+            activated_nodes.update(newly_activated)
             
             nij = self.get_property(newly_activated)
             
@@ -105,7 +104,7 @@ class Wolf:
                 self.group_activation_dict[key] += [len(nij[key])] 
             idx += 1 
             
-        self.component = np.array(range(idx - 2, -1, -1))
+        self.component = np.array(range(idx , 0, -1))
         
         self.next = activated_nodes
         self.next_c = self.get_property(self.next)
@@ -134,8 +133,8 @@ class Wolf:
             self.start = self.start.union(set(random.sample(list(e_n), step)))
             
         else:
-            if len(self.v)<self.g_len*0.8:
-                self.v = set(range(self.g_len))
+            if len(self.v)<self.g_len*0.25:
+                self.v = set(range(self.g_len)) - self.start
             e_n = self.v - self.start.union(self.leader)
             e_o = self.start.intersection(self.leader) 
             d = len(self.start - self.leader)
@@ -150,27 +149,23 @@ class Wolf:
             
                     
     def get_property(self,node_set):
-        property_dict = defaultdict(list)
+        property_dict = defaultdict(set)
         for node in node_set:
-            property_value = self.g.nodes[node][self.attribute]
-            if property_value not in property_dict:
-                property_dict[property_value] = []
-            property_dict[property_value].append(node)
-
-        for key, value in property_dict.items():
-            property_dict[key] = set(value)
+            property_dict[self.g.nodes[node][self.attribute]].add(node)
         return property_dict
     
-    def get_leader(self, wolves):
-        min_difference = 100
+    def get_leader(self, leaders):
+        min_difference = SEED_SIZE+1
         self.leader = set()
-        if len(wolves)>0:
-            for X in wolves:
+        random.shuffle(leaders)
+
+        if len(leaders)>0:
+            for X in leaders:
                 difference = len(self.start - X.start)
                 if difference < min_difference:
                     min_difference = difference
-                    self.leader = X.start
+                    self.leader = set(X.start)
         else:
-            self.leader =  set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))
-
+            raise NotImplementedError
+            # self.leader =  set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))
         self.leader = set(np.array(list(self.leader))[np.random.rand(SEED_SIZE) < np.random.rand(SEED_SIZE)])

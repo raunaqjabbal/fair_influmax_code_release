@@ -1,5 +1,5 @@
 @echo off
-set repetitions=15 
+set repetitions=30
 
 START cmd /k python run.py -a age -o maximin -r %repetitions%
 START cmd /k python run.py -a gender -o maximin -r %repetitions%

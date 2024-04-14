@@ -19,86 +19,61 @@ from wolf import Wolf
 import gc
 
 def get_graphs():
-    # for 
-    graphnames = ['spa_500_{}'.format(graphidx) for graphidx in range(50)]
     GRAPHS = []
     for path in os.listdir("fair_influmax_code_release/networks"):
         g = pickle.load(open(f"fair_influmax_code_release/networks/{path}", 'rb'))
         g = nx.convert_node_labels_to_integers(g, label_attribute='pid')
         GRAPHS += [g]
     return GRAPHS
-    
-
 
 def find_pareto_fronts(wolves):
     objective_values = np.array([wolf.objective_values for wolf in wolves])
-    domination_counts = np.sum(np.all(objective_values >= objective_values[:, np.newaxis], axis=2), axis=1)
-    counter = 1
+    domination_counts = np.sum(np.any(objective_values > objective_values[:, np.newaxis], axis=2), axis=1)
+    counter = 0
     while True:
         pareto_front = [copy.deepcopy(wolves[i]) for i, count in enumerate(domination_counts) if count == counter]
         if pareto_front:
             break
         else:
             counter+=1
-            
     return pareto_front
 
 def setmogwo(g, attribute, objectives):
     wolves = [Wolf(g, attribute, objectives) for i in range(POPULATION_SIZE)]
     archive = []
-    # DEBUG = wolves[0]
     for i in range(ITERATIONS):
-        time1 = time.time()
         a = 2 - i * (2/ITERATIONS)
         A = 2* a * np.random.rand(SEED_SIZE) - a
-        C = 2* np.random.rand(len(g.nodes()))
+        C = 2* np.random.rand(SEED_SIZE)
 
         magnitude_A = np.linalg.norm(A)
-        time9 = time.time()
         for wolf in wolves:
             wolf.ic_model()
-
-        time2 = time.time()
-        
         archive = find_pareto_fronts(wolves+archive)
-        
-        time3 = time.time()
         if len(archive)>3:
             leaders = random.sample(archive, 3)
         else:
             leaders = archive
-        # print(len(archive), len(leaders[0].start), leaders[0].objective_values)    
         
         if len(leaders)==0:
-            print("\n ARCHIVE \n")
             raise NotImplementedError
-        now = time.time()
         for wolf in wolves:
-            if wolf not in leaders:
-                wolf.get_leader(leaders)
-                wolf.get_next_start(magnitude_A)
-        # print("-"*100)
-        
-        time4 = time.time()
-        # print("Init: ", time9-time1)
-        # print("IC: ", time2-time9)
-        # print("Pareto: ", time3-time2)
-        # print("Iterate: ", time4-time3)
-        # print("Total: ", time4-time1)
-        # print()            
+            # if wolf not in leaders:
+            wolf.get_leader(leaders)
+            wolf.get_next_start(magnitude_A)
     return archive
 
 
 def simulate(GRAPHS, attribute, objectives, repetitions, pof):
     results =[]
     archives = []
-    for _ in range(repetitions):
-        for g in tqdm(GRAPHS):
+    for _ in pit(range(repetitions), color="red"):
+        for g in pit(GRAPHS, color="blue"):
             archive = setmogwo(g, attribute, objectives)
             archives += archive 
-        gc.collect()
+        # gc.collect()
         
-    archives = find_pareto_fronts(archives)
+    # archives = find_pareto_fronts(archives)
     for arch in archives:
         results += [[arch.influence_metric(), arch.maximin_fairness_metric(), arch.group_rationality_metric(), arch.group_activation_speed_metric()]]
             
@@ -144,5 +119,25 @@ def main():
     
     return final_results
 
+
+def pit(it, *pargs, **nargs):
+    import enlighten
+    global __pit_man__
+    try:
+        __pit_man__
+    except NameError:
+        __pit_man__ = enlighten.get_manager()
+    man = __pit_man__
+    it_len = len(it)
+    ctr = None
+    ctr = None
+    for i, e in enumerate(it):
+        if i == 0:
+            ctr = man.counter(*pargs, **{**dict(leave = False, total = it_len), **nargs})
+        yield e
+        ctr.update()
+    if ctr is not None:
+        ctr.close()
+        
 if __name__ == '__main__':
     main()
