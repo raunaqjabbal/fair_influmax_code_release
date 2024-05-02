@@ -20,7 +20,6 @@ class Wolf:
         self.g_len = len(self.g.nodes)
         self.start = set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))    
         self.attribute = attribute
-        self.v = set(range(self.g_len)) - self.start
         
         self.start_c = self.get_property(self.start)
         self.c = self.get_property(range(self.g_len))
@@ -110,31 +109,30 @@ class Wolf:
         self.objective_values = np.round(self.objective_values,4)
 
         
-    def get_next_start(self,A):
-        if A<1:
-            e_n = self.leader - self.start
-            e_o = self.start - self.leader
-            d = len(e_o)
-            step = int(np.ceil((1-A)*d))
-            step = min(step, len(e_o), len(e_n))
-            self.start = self.start - set(random.sample(list(e_o), step))
-            self.start = self.start.union(set(random.sample(list(e_n), step)))
-            
-        else:
-            if len(self.v)<self.g_len*0.25:
-                self.v = set(range(self.g_len)) - self.start
-            e_n = self.v - self.start.union(self.leader)
-            e_o = self.start.intersection(self.leader) 
-            d = len(self.start - self.leader)
-            
-            step = int(np.ceil((A-1)*d))
-            step = min(step, len(e_o), len(e_n))
-            
-            self.start = self.start - set(random.sample(list(e_o), step))
-            v_step = set(random.sample(list(e_n), step))
-            self.start = self.start.union(v_step)
-            self.v = self.v - v_step 
-            
+    def get_next_start(self,A, leaders):
+        new_wolves = []
+        for leader in leaders:
+            leader = leader.start.copy()
+            start = self.start.copy()
+            if A<1:
+                e_n = leader - start
+                e_o = start - leader
+                d = len(e_o)
+                step = int(np.ceil((1-A)*d))
+                step = min(step, len(e_o), len(e_n))
+                start = start - set(random.sample(list(e_o), step))
+                start = start.union(set(random.sample(list(e_n), step)))
+                
+            else:
+                e_n = (set(range(self.g_len)) - start) - start.union(leader)
+                e_o = start.intersection(leader) 
+                d = len(start - leader)
+                step = int(np.ceil((A-1)*d))
+                step = min(step, len(e_o), len(e_n))
+                start = start - set(random.sample(list(e_o), step))
+                start = start.union(set(random.sample(list(e_n), step)))
+            new_wolves += [start]
+        return new_wolves
                     
     def get_property(self,node_set):
         property_dict = defaultdict(set)
@@ -142,18 +140,3 @@ class Wolf:
             property_dict[self.g.nodes[node][self.attribute]].add(node)
         return property_dict
     
-    def get_leader(self, leaders):
-        min_difference = SEED_SIZE+1
-        self.leader = set()
-        random.shuffle(leaders)
-
-        if len(leaders)>0:
-            for X in leaders:
-                difference = len(self.start - X.start)
-                if difference < min_difference:
-                    min_difference = difference
-                    self.leader = set(X.start)
-        else:
-            raise NotImplementedError
-            # self.leader =  set(np.random.choice(range(self.g_len), SEED_SIZE,replace=False))
-        self.leader = set(np.array(list(self.leader))[np.random.rand(SEED_SIZE) < np.random.rand(SEED_SIZE)])

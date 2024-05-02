@@ -57,10 +57,16 @@ def setmogwo(g, attribute, objectives):
         
         if len(leaders)==0:
             raise NotImplementedError
+        new_wolves = []
         for wolf in wolves:
             # if wolf not in leaders:
-            wolf.get_leader(leaders)
-            wolf.get_next_start(magnitude_A)
+            pups_start = wolf.get_next_start(magnitude_A,leaders)
+            for pup_start in pups_start:
+                pup = Wolf(g, attribute, objectives)
+                pup.start = pup_start
+                new_wolves += [pup]
+        wolves = new_wolves
+                
     return archive
 
 
