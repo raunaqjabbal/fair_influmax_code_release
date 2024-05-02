@@ -73,7 +73,7 @@ def simulate(GRAPHS, attribute, objectives, repetitions, pof):
             archives += archive 
         # gc.collect()
         
-    # archives = find_pareto_fronts(archives)
+    archives = find_pareto_fronts(archives)
     for arch in archives:
         results += [[arch.influence_metric(), arch.maximin_fairness_metric(), arch.group_rationality_metric(), arch.group_activation_speed_metric()]]
             

@@ -22,8 +22,8 @@ class Wolf:
         self.attribute = attribute
         self.v = set(range(self.g_len)) - self.start
         
-        self.c = self.get_property(range(self.g_len))
         self.start_c = self.get_property(self.start)
+        self.c = self.get_property(range(self.g_len))
         self.objectives = objectives
         
         self.subgraph = {key: self.g.subgraph(self.c[key]) for key,_ in self.c.items()}
@@ -34,11 +34,8 @@ class Wolf:
         return self.influence
 
     def maximin_fairness_metric(self):
-        self.maximin_fairness = 2
-        for kind, start_list in self.c.items():
-            ratio = self.next_c[kind]/len(start_list)
-            if self.maximin_fairness > ratio:
-                self.maximin_fairness = ratio
+        ratios = [len(self.next_c[kind])/len(self.c[kind]) for kind in self.c.keys()]
+        self.maximin_fairness = min(ratios)
         return self.maximin_fairness
 
     def group_rationality_metric(self):
@@ -67,16 +64,8 @@ class Wolf:
     
     #maximize
     def group_activation_speed_metric(self):
-        self.group_activation_speed = np.inf
-        
-        for key, value in self.c.items():
-            speed_key = np.dot(np.array(self.group_activation_dict[key]),self.component)/(self.component[0]*len(value - self.start_c[key].intersection(value)) )                
-            if speed_key < self.group_activation_speed:
-                self.group_activation_speed = speed_key
-        
-        if self.group_activation_speed == np.inf:
-            raise NotImplementedError
-            # self.group_activation_speed = 0
+        speed_keys = [np.dot(np.array(self.group_activation_dict[key]),self.component)/(self.component[0]*len(value - self.start_c[key].intersection(value)) ) for key,value in self.c.items()]                
+        self.group_activation_speed = min(speed_keys)
         return self.group_activation_speed
     
     def ic_model(self, g=None, start=None):
@@ -100,7 +89,7 @@ class Wolf:
             
             nij = self.get_property(newly_activated)
             
-            for key,value in self.c.items():
+            for key in self.c.keys():
                 self.group_activation_dict[key] += [len(nij[key])] 
             idx += 1 
             
@@ -122,7 +111,6 @@ class Wolf:
 
         
     def get_next_start(self,A):
-        global DEBUG
         if A<1:
             e_n = self.leader - self.start
             e_o = self.start - self.leader
