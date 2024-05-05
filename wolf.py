@@ -24,6 +24,7 @@ class Wolf:
         self.start_c = self.get_property(self.start)
         self.c = self.get_property(range(self.g_len))
         self.objectives = objectives
+        self.v = set(range(self.g_len))
         
         self.subgraph = {key: self.g.subgraph(self.c[key]) for key,_ in self.c.items()}
         self.objective_values = []
@@ -110,29 +111,50 @@ class Wolf:
 
         
     def get_next_start(self,A, leaders):
-        new_wolves = []
-        for leader in leaders:
-            leader = leader.start.copy()
+        if A<1:
+            random.shuffle(leaders)
             start = self.start.copy()
-            if A<1:
-                e_n = leader - start
-                e_o = start - leader
-                d = len(e_o)
-                step = int(np.ceil((1-A)*d))
-                step = min(step, len(e_o), len(e_n))
+            min_difference = SEED_SIZE
+            for X in leaders:
+                difference = len(self.start - X.start)
+                if difference <= min_difference:
+                    min_difference = difference
+                    leader = set(X.start)
+            e_n = leader - start
+            e_o = start - leader
+            d = len(e_o)
+            step = int(np.ceil((A*1.2)*d))
+            step = min(step, len(e_o), len(e_n))
+            if step!=0:
                 start = start - set(random.sample(list(e_o), step))
                 start = start.union(set(random.sample(list(e_n), step)))
-                
             else:
-                e_n = (set(range(self.g_len)) - start) - start.union(leader)
+                if len(e_o)==0:
+                    to_change = min(random.randint(2,5),len(e_n))
+                    start = start - set(random.sample(list(start), to_change))
+                    start = start.union(set(random.sample(list(e_n), to_change)))
+            self.start = start
+            
+        else:
+            new_wolves = []
+            for leader in leaders:
+                leader = leader.start.copy()
+                start = self.start.copy()
+                e_n = self.v - start.union(leader)
                 e_o = start.intersection(leader) 
                 d = len(start - leader)
-                step = int(np.ceil((A-1)*d))
-                step = min(step, len(e_o), len(e_n))
-                start = start - set(random.sample(list(e_o), step))
-                start = start.union(set(random.sample(list(e_n), step)))
-            new_wolves += [start]
-        return new_wolves
+                step = int(np.ceil((A/2+0.25)*d))
+                step = min(step,len(e_o) ,len(e_n))
+                if step!=0:
+                    start = start - set(random.sample(list(e_o), step))
+                    start = start.union(set(random.sample(list(e_n), step)))
+                else:
+                    to_change = random.randint(5,15)
+                    start = start - set(random.sample(list(start), to_change))
+                    start = start.union(set(random.sample(list(e_n), to_change)))
+                    
+                new_wolves += [start]
+            self.start =  random.sample(new_wolves,1)[0]
                     
     def get_property(self,node_set):
         property_dict = defaultdict(set)

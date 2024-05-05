@@ -26,16 +26,33 @@ def get_graphs():
         GRAPHS += [g]
     return GRAPHS
 
-def find_pareto_fronts(wolves):
+def find_pareto_fronts(wolves, num=None):
     objective_values = np.array([wolf.objective_values for wolf in wolves])
     domination_counts = np.sum(np.any(objective_values > objective_values[:, np.newaxis], axis=2), axis=1)
-    counter = 0
-    while True:
-        pareto_front = [copy.deepcopy(wolves[i]) for i, count in enumerate(domination_counts) if count == counter]
-        if pareto_front:
-            break
-        else:
-            counter+=1
+    if num==None:
+        counter = 0
+        while True:
+            pareto_front = [copy.deepcopy(wolves[i]) for i, count in enumerate(domination_counts) if count == counter]
+            if pareto_front:
+                break
+            else:
+                counter+=1
+    else:
+        counter = 0
+        checker = 0
+        pareto_front = []
+        while True:
+            front = [copy.deepcopy(wolves[i]) for i, count in enumerate(domination_counts) if count == counter]
+            if len(front)>=num-checker:
+                pareto_front += front[:num-checker]
+            else:
+                pareto_front += front
+                checker+= len(front)
+            
+            if len(pareto_front)>=num:
+                break
+            else:
+                counter+=1
     return pareto_front
 
 def setmogwo(g, attribute, objectives):
@@ -59,18 +76,11 @@ def setmogwo(g, attribute, objectives):
             raise NotImplementedError
         new_wolves = []
         for wolf in wolves:
-            # if wolf not in leaders:
-            pups_start = wolf.get_next_start(magnitude_A,leaders)
-            for pup_start in pups_start:
-                pup = Wolf(g, attribute, objectives)
-                pup.start = pup_start
-                new_wolves += [pup]
-        wolves = new_wolves
-                
+            wolf.get_next_start(magnitude_A,leaders)
     return archive
 
 
-def simulate(GRAPHS, attribute, objectives, repetitions, pof):
+def simulate(GRAPHS, attribute, objectives, repetitions):
     results =[]
     archives = []
     for _ in pit(range(repetitions), color="red"):
@@ -93,10 +103,10 @@ def main():
     parser.add_argument('-a','--attribute', choices=["age", "gender", "ethnicity"], help='The attribute to process')
     parser.add_argument('-o','--objectives', nargs='+', choices={"maximin", "speed", "rationality"}, help='The metrics to use')    
     parser.add_argument('-r','--repetitions', type=int, help='Number of iterations (positive integer)')
-    parser.add_argument('--pof', action='store_true', help='Set this flag to True')
+    parser.add_argument('-p', '--savepath', type=str, default="data")
 
-    algo_name = "SetMOGWO_I"
     args = parser.parse_args()
+    algo_name = "SetMOGWO_I"
     if args.objectives:
         args.objectives = set(args.objectives)    
         for objective in args.objectives:
@@ -107,20 +117,15 @@ def main():
     
     FILENAME = f"{algo_name}_{args.attribute}.json"
     print(FILENAME)
-    results = simulate(GRAPHS, args.attribute, args.objectives, args.repetitions, args.pof)
-    if args.pof:
-        final_results = {"algorithm":algo_name, "attribute": args.attribute, 
-                        "influence": results[0], "maximin": results[1],
-                        "rationality": results[2], "speed": results[3],
-                        "mean_rationality_violation": results[4:]}
-    else:
-        final_results = {"algorithm":algo_name, "attribute": args.attribute, 
+    results = simulate(GRAPHS, args.attribute, args.objectives, args.repetitions)
+    
+    final_results = {"algorithm":algo_name, "attribute": args.attribute, 
                         "influence": results[0], "maximin": results[1],
                         "rationality": results[2], "speed": results[3],
                         "mean_rationality_violation": results[4]}    
     print(final_results)
-    
-    with open(os.path.join("data", FILENAME), 'w') as json_file:
+    os.makedirs(args.savepath, exist_ok=True)
+    with open(os.path.join(args.savepath, FILENAME), 'w') as json_file:
         json.dump(final_results, json_file)
     
     return final_results
